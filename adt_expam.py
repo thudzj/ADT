@@ -14,7 +14,7 @@ from torchvision import datasets, transforms
 from models.wideresnet import *
 from models.resnet import *
 from trades import trades_loss
-from generator_zhijie import define_G, get_scheduler, set_requires_grad
+from generator1 import define_G, get_scheduler, set_requires_grad
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR TRADES Adversarial Training')
 parser.add_argument('--batch-size', type=int, default=64, metavar='N',
