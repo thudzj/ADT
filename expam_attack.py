@@ -49,33 +49,45 @@ parser.add_argument('--model-dir', default='./model-cifar-wideResNet',
                     help='directory of model for saving checkpoint')
 parser.add_argument('--save-freq', '-s', default=5, type=int, metavar='N',
                     help='save frequency')
-
-parser.add_argument('--net_G', type=str, default='resnet_3blocks', help='net for G')
-parser.add_argument('--opt_G', type=str, default='adam', help='optimizer for G')
-parser.add_argument('--num_train_G', type=int, default=1, help='# for training G')
-parser.add_argument('--lr_G', type=float, default=0.0002, help='initial learning rate for adam')
-parser.add_argument('--lr_policy_G', type=str, default='linear', help='learning rate policy. [linear | step | plateau | cosine]')
-parser.add_argument('--lr_decay_iters_G', type=int, default=30, help='multiply by a gamma every lr_decay_iters iterations')
-parser.add_argument('--niter_G', type=int, default=100, help='# of iter at starting learning rate')
-parser.add_argument('--niter_decay_G', type=int, default=50, help='# of iter to linearly decay learning rate to zero')
-parser.add_argument('--beta1_G', type=float, default=0.5, help='momentum term of adam')
-parser.add_argument('--no_zero_pad', action='store_true', default=False, help='no_zero_pad')
+parser.add_argument('--net_G', type=str, default='resnet_3blocks', 
+                    help='net for G')
+parser.add_argument('--opt_G', type=str, default='adam', 
+                    help='optimizer for G')
+parser.add_argument('--lr_G', type=float, default=0.0002, 
+                    help='initial learning rate for adam')
+parser.add_argument('--lr_policy_G', type=str, default='linear', 
+                    help='learning rate policy. [linear | step | plateau | cosine]')
+parser.add_argument('--lr_decay_iters_G', type=int, default=30, 
+                    help='multiply by a gamma every lr_decay_iters iterations')
+parser.add_argument('--niter_G', type=int, default=100, 
+                    help='# of iter at starting learning rate')
+parser.add_argument('--niter_decay_G', type=int, default=50, 
+                    help='# of iter to linearly decay learning rate to zero')
+parser.add_argument('--beta1_G', type=float, default=0.5, 
+                    help='momentum term of adam')
+parser.add_argument('--no_zero_pad', action='store_true', default=False, 
+                    help='no_zero_pad')
 parser.add_argument('--load_clf', default=None, help='load_clf')
-parser.add_argument('--down_G', action='store_true', default=False, help='down_G')
+parser.add_argument('--down_G', action='store_true', default=False, 
+                    help='down_G')
 parser.add_argument('--use_relu_G', action='store_true', default=False, help='use_relu')
 parser.add_argument('--ngf_G', type=int, default=256, help='# ')
-parser.add_argument('--loss_type', type=str, default='normal', choices=['normal', 'trades'], help='Use which loss to produce perturbations')
-parser.add_argument('--outs', type=int, default=1, help='# of out samples')
-parser.add_argument('--norm_G', type=str, default='batch', choices=['batch', 'cbn', 'instance'], help='Use which to norm')
-parser.add_argument('--use_dropout_G', action='store_true', default=False, help='use_dropout_G')
-parser.add_argument('--enlarge-factor', type=float, default=1.0, help='Enlarge factor for perturbation')
-parser.add_argument('--z_dim', type=int, default=64, help='z_dim')
-parser.add_argument('--entropy', type=float, default=0.01, help='entropy weight')
-parser.add_argument('--entropy_th', type=float, default=-100., help='entropy_th')
-parser.add_argument('--fixed_var', action='store_true', default=False, help='fixed_var')
-parser.add_argument('--dataset', type=str, default='cifar10', help='dataset')
-parser.add_argument('--pretrained_g', action='store_true', default=False, help='pretrained_g')
-parser.add_argument('--dist', type=str, default='gaussian', help='dist')
+parser.add_argument('--loss_type', type=str, default='normal', choices=['normal', 'trades'], 
+                    help='Use which loss to produce perturbations')
+parser.add_argument('--norm_G', type=str, default='batch', choices=['batch', 'cbn', 'instance'], 
+                    help='Use which to norm')
+parser.add_argument('--use_dropout_G', action='store_true', default=False, 
+                    help='use_dropout_G')
+parser.add_argument('--z_dim', type=int, default=64, 
+                    help='z_dim')
+parser.add_argument('--lambda', type=float, default=0.01, 
+                    help='entropy weight')
+parser.add_argument('--dataset', type=str, default='cifar10', 
+                    help='dataset')
+parser.add_argument('--pretrained_g', action='store_true', default=False, 
+                    help='pretrained_g')
+parser.add_argument('--dist', type=str, default='gaussian', 
+                    help='dist')
 
 args = parser.parse_args()
 args.use_relu_G = True
@@ -143,35 +155,15 @@ def grad_inv(grad):
 
 def generate_adv(adv_raw, tau=None, return_entropy=False):
     entropy = torch.cuda.FloatTensor([0.])
-    nc = 3 if args.dist != 'gaussian' else 6
-    if args.outs > 1:
-        tmp = np.random.randint(0, args.outs)
-        adv_raw = adv_raw[:, tmp*nc:(tmp+1)*nc, :, :]
     if args.dist == 'none':
         adv = torch.tanh(adv_raw)
-        # flag_pos = (adv > 0.8).float()
-        # adv = (adv * (1 - flag_pos) + 1. * flag_pos - adv).detach() + adv
     elif args.dist == 'gaussian':
         adv_mean = adv_raw[:, :3, :, :]
         adv_std = F.softplus(adv_raw[:, 3:, :, :])
         rand_noise = torch.randn_like(adv_std)
-        adv = torch.tanh(adv_mean + rand_noise * adv_std) #torch.clamp(adv_mean + torch.randn_like(adv_std)*adv_std, -1., 1.)
-        # entropy = -(adv_std+1e-8).log().mean() #F.relu(-adv_std.log().mean()+args.entropy_th)
+        adv = torch.tanh(adv_mean + rand_noise * adv_std)
         logp = -(rand_noise ** 2) / 2. - (adv_std + 1e-8).log() - math.log(math.sqrt(2 * math.pi)) - (-adv ** 2 + 1 + 1e-8).log()
         entropy = logp.mean() #should be called neg entropy
-    elif 'bernoulli_repara' in args.dist:
-        if tau is None:
-            tau = args.tau
-        uniforms = clamp_probs(torch.rand_like(adv_raw))
-        adv = ((uniforms.log() - (-uniforms).log1p() + adv_raw) / tau).sigmoid()
-        if 'hard' in args.dist:
-            adv = ((adv >= 0.5).float() - adv).detach() + adv
-        adv = adv * 2 - 1
-    elif args.dist == 'bernoulli_st':
-        adv_p = adv_raw.sigmoid()
-        adv = torch.gt(adv_p,torch.rand_like(adv_p)).float()
-        adv = (adv-adv_p).detach() + adv_p
-        adv = adv * 2 - 1
     else:
         raise NotImplementedError
     if return_entropy:
@@ -181,8 +173,7 @@ def generate_adv(adv_raw, tau=None, return_entropy=False):
 
 def train(args, model, device, train_loader, optimizer, epoch, G, optimizer_G):
     g_loss, g_loss_robust = [], []
-    for _ in range(args.num_train_G):
-        g_loss.append(AverageMeter()); g_loss_robust.append(AverageMeter());
+    g_loss.append(AverageMeter()); g_loss_robust.append(AverageMeter());
     c_loss, c_loss_robust, entropies, loss1, loss2 = AverageMeter(), AverageMeter(), AverageMeter(), AverageMeter(), AverageMeter()
 
     # model.train()
@@ -208,21 +199,18 @@ def train(args, model, device, train_loader, optimizer, epoch, G, optimizer_G):
 
         adv_raw_2 = G(torch.cat([data, grad, grad_2], 1))
 
-        # model.train()
-        # optimizer.zero_grad()
         optimizer_G.zero_grad()
 
         adv2, entropy = generate_adv(adv_raw_2, return_entropy=True)
         entropies.update(entropy.item(), bs)
-        #adv.register_hook(grad_inv)
-        x_adv2 = torch.clamp(data + args.epsilon * torch.clamp(args.enlarge_factor * adv2, -1, 1), 0.0, 1.0)
+        x_adv2 = torch.clamp(data + args.epsilon * torch.clamp(adv2, -1, 1), 0.0, 1.0)
         x_adv2.register_hook(grad_inv)
         logits = model(x_adv2)
 
         loss_robust = F.cross_entropy(logits, target)
         loss = loss_robust
 
-        ((loss + entropy * args.entropy)).backward()
+        ((loss + entropy * args.lambda)).backward()
         # optimizer.step()
         optimizer_G.step()
 
@@ -282,7 +270,7 @@ def eval(model, G, device, train_loader):
         for _ in range(k):
             adv2, entropy = generate_adv(adv_raw_2, return_entropy=True)
 
-            x_adv = torch.clamp(data + args.epsilon * torch.clamp(args.enlarge_factor * adv2, -1, 1), 0.0, 1.0).detach()
+            x_adv = torch.clamp(data + args.epsilon * torch.clamp(adv2, -1, 1), 0.0, 1.0).detach()
 
             with torch.no_grad():
                 output_adv = model(x_adv)
@@ -328,12 +316,7 @@ def main():
     else:
         raise NotImplementedError
 
-
-    # model = WideResNet(depth=28, num_classes=100 if args.dataset == 'cifar100' else 10).to(device)
-    # optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-
-    G = define_G(9, 6, args.ngf_G, args.net_G, not args.no_zero_pad, norm=args.norm_G, no_down_G=not args.down_G, use_relu_atlast=args.use_relu_G, outs=args.outs, use_dropout=args.use_dropout_G)
-    # print(G)
+    G = define_G(9, 6, args.ngf_G, args.net_G, not args.no_zero_pad, norm=args.norm_G, no_down_G=not args.down_G, use_relu_atlast=args.use_relu_G, outs=1, use_dropout=args.use_dropout_G)
 
     if args.pretrained_g:
         G.load_state_dict(torch.load('generator_cifar10.pt'))
@@ -348,32 +331,11 @@ def main():
     print('  + Number of params of classifier: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
     print('  + Number of params of generator: {}'.format(sum([p.data.nelement() for p in G.parameters()])))
 
-    # if args.load_clf:
-    #     model.load_state_dict(torch.load(args.load_clf))
-    #     G.load_state_dict(torch.load(args.load_clf.replace('model-wideres', 'generator')))
-    #     debug(args, model, device, train_loader, optimizer, 0, G, optimizer_G)
-
-    # eval(model, G, device, test_loader)
     for epoch in range(1, args.epochs + 1):
-        # adjust learning rate for SGD
-        # adjust_learning_rate(optimizer, epoch)
-
         # adversarial training
         train(args, model, device, train_loader, None, epoch, G, optimizer_G)
-        # scheduler_G.step()
         if epoch > 400 and epoch % 25 == 0:
             eval(model, G, device, test_loader)
-
-        # save checkpoint
-        # if epoch % args.save_freq == 0:
-        #     # torch.save(model.state_dict(),
-        #     #            os.path.join(model_dir, 'model-wideres-epoch{}.pt'.format(epoch)))
-        #     # torch.save(optimizer.state_dict(),
-        #     #            os.path.join(model_dir, 'opt-wideres-checkpoint_epoch{}.tar'.format(epoch)))
-        #     torch.save(G.state_dict(),
-        #                os.path.join(model_dir, 'generator-epoch{}.pt'.format(epoch)))
-        #     torch.save(optimizer_G.state_dict(),
-        #                os.path.join(model_dir, 'optG_epoch{}.tar'.format(epoch)))
 
 if __name__ == '__main__':
     main()
