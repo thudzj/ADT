@@ -46,7 +46,7 @@ parser.add_argument('--save-freq', '-s', default=5, type=int, metavar='N',
 parser.add_argument('--loss-type', type=str, default='gaussian', 
                     choices=['cross_entropy', 'trades', 'gaussian', 'standard', 'FGSM-ll', 'gaussian-trades', 'alp'],
                     help='loss type for training')
-parser.add_argument('--entropy', type=float, default=0.01,
+parser.add_argument('--lambda', type=float, default=0.01,
                     help='entropy weight')
 parser.add_argument('--dataset', type=str, default='cifar10', help='dataset')
 
@@ -121,7 +121,7 @@ def train(args, model, device, train_loader, optimizer, epoch):
                                 epsilon=args.epsilon,
                                 perturb_steps=args.num_steps,
                                 num_samples=5,
-                                entropy_weight=args.entropy)
+                                entropy_weight=args.lambda)
         
         elif args.loss_type == 'standard':
             loss = F.cross_entropy(model(data), target)
@@ -142,7 +142,7 @@ def train(args, model, device, train_loader, optimizer, epoch):
                                        epsilon=args.epsilon,
                                        perturb_steps=args.num_steps,
                                        num_samples=5,
-                                       entropy_weight=args.entropy,
+                                       entropy_weight=args.lambda,
                                        beta=args.beta)
 
         elif args.loss_type == 'alp':
