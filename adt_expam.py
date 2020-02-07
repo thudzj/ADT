@@ -68,7 +68,7 @@ parser.add_argument('--tau', type=float, default=1., help='Temperature for the g
 parser.add_argument('--loss_type', type=str, default='normal', choices=['normal', 'trades'], help='Use which loss to produce perturbations')
 parser.add_argument('--outs', type=int, default=1, help='# of out samples')
 parser.add_argument('--num_samples', type=int, default=1, help='# of out samples')
-parser.add_argument('--entropy', type=float, default=0.01, help='entropy weight')
+parser.add_argument('--lambda', type=float, default=0.01, help='entropy weight')
 parser.add_argument('--entropy_th', type=float, default=-6., help='entropy_th')
 # parser.add_argument('--grad_renorm', action='store_true', default=False, help='grad_renorm')
 # parser.add_argument('--gram_pal', type=float, default=1., help='gram_pal')
@@ -270,7 +270,7 @@ def train(args, model, device, train_loader, optimizer, epoch, G, optimizer_G):
             else:
                 raise NotImplementedError
 
-            ((loss + entropy * args.entropy)/args.num_samples).backward(retain_graph=True if _ != args.num_samples - 1 else False)
+            ((loss + entropy * args.lambda)/args.num_samples).backward(retain_graph=True if _ != args.num_samples - 1 else False)
 
         optimizer.step()
         optimizer_G.step()
