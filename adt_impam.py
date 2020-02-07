@@ -48,31 +48,46 @@ parser.add_argument('--model-dir', default='./model-cifar-wideResNet',
                     help='directory of model for saving checkpoint')
 parser.add_argument('--save-freq', '-s', default=5, type=int, metavar='N',
                     help='save frequency')
-
-parser.add_argument('--net_G', type=str, default='resnet_3blocks', help='net for G')
-parser.add_argument('--opt_G', type=str, default='adam', help='optimizer for G')
-parser.add_argument('--num_train_G', type=int, default=1, help='# for training G')
-parser.add_argument('--lr_G', type=float, default=0.0002, help='initial learning rate for adam')
-parser.add_argument('--lr_policy_G', type=str, default='linear', help='learning rate policy. [linear | step | plateau | cosine]')
-parser.add_argument('--lr_decay_iters_G', type=int, default=30, help='multiply by a gamma every lr_decay_iters iterations')
-parser.add_argument('--niter_G', type=int, default=100, help='# of iter at starting learning rate')
-parser.add_argument('--niter_decay_G', type=int, default=50, help='# of iter to linearly decay learning rate to zero')
-parser.add_argument('--beta1_G', type=float, default=0.5, help='momentum term of adam')
-parser.add_argument('--no_zero_pad', action='store_true', default=False, help='no_zero_pad')
-parser.add_argument('--load_clf', default=None, help='load_clf')
-parser.add_argument('--down_G', action='store_true', default=False, help='down_G')
-parser.add_argument('--use_relu_G', action='store_true', default=False, help='use_relu')
-parser.add_argument('--ngf_G', type=int, default=256, help='# ')
-parser.add_argument('--loss_type', type=str, default='normal', choices=['normal', 'trades'], help='Use which loss to produce perturbations')
-parser.add_argument('--outs', type=int, default=1, help='# of out samples')
-parser.add_argument('--norm_G', type=str, default='batch', choices=['batch', 'cbn', 'instance'], help='Use which to norm')
-parser.add_argument('--use_dropout_G', action='store_true', default=False, help='use_dropout_G')
-parser.add_argument('--enlarge-factor', type=float, default=1.0, help='Enlarge factor for perturbation')
-parser.add_argument('--z_dim', type=int, default=64, help='z_dim')
-parser.add_argument('--lambda', type=float, default=1., help='entropy weight')
-parser.add_argument('--entropy_th', type=float, default=0.9, help='entropy_th')
-parser.add_argument('--fixed_var', action='store_true', default=False, help='fixed_var')
-parser.add_argument('--dataset', type=str, default='cifar10', help='dataset')
+parser.add_argument('--net_G', type=str, default='resnet_3blocks', 
+                    help='net for G')
+parser.add_argument('--opt_G', type=str, default='adam', 
+                    help='optimizer for G')
+parser.add_argument('--lr_G', type=float, default=0.0002, 
+                    help='initial learning rate for adam')
+parser.add_argument('--lr_policy_G', type=str, default='linear', 
+                    help='learning rate policy. [linear | step | plateau | cosine]')
+parser.add_argument('--lr_decay_iters_G', type=int, default=30, 
+                    help='multiply by a gamma every lr_decay_iters iterations')
+parser.add_argument('--niter_G', type=int, default=100, 
+                    help='# of iter at starting learning rate')
+parser.add_argument('--niter_decay_G', type=int, default=50, 
+                    help='# of iter to linearly decay learning rate to zero')
+parser.add_argument('--beta1_G', type=float, default=0.5, 
+                    help='momentum term of adam')
+parser.add_argument('--no_zero_pad', action='store_true', default=False, 
+                    help='no_zero_pad')
+parser.add_argument('--load_clf', default=None, 
+                    help='load_clf')
+parser.add_argument('--down_G', action='store_true', default=False, 
+                    help='down_G')
+parser.add_argument('--use_relu_G', action='store_true', default=False, 
+                    help='use_relu')
+parser.add_argument('--ngf_G', type=int, default=256, 
+                    help='# ')
+parser.add_argument('--loss_type', type=str, default='normal', choices=['normal', 'trades'], 
+                    help='Use which loss to produce perturbations')
+parser.add_argument('--norm_G', type=str, default='batch', choices=['batch', 'cbn', 'instance'], 
+                    help='Use which to norm')
+parser.add_argument('--use_dropout_G', action='store_true', default=False, 
+                    help='use_dropout_G')
+parser.add_argument('--z_dim', type=int, default=64, 
+                    help='z_dim')
+parser.add_argument('--lambda', type=float, default=1., 
+                    help='entropy weight')
+parser.add_argument('--entropy_th', type=float, default=0.9, 
+                    help='entropy_th')
+parser.add_argument('--dataset', type=str, default='cifar10', 
+                    help='dataset')
 
 args = parser.parse_args()
 args.use_relu_G = True
@@ -140,8 +155,7 @@ def grad_inv(grad):
 
 def train(args, model, device, train_loader, optimizer, epoch, G, optimizer_G, encoder, optimizer_encoder):
     g_loss, g_loss_robust = [], []
-    for _ in range(args.num_train_G):
-        g_loss.append(AverageMeter()); g_loss_robust.append(AverageMeter());
+    g_loss.append(AverageMeter()); g_loss_robust.append(AverageMeter());
     c_loss, c_loss_robust, entropies, loss1, loss2 = AverageMeter(), AverageMeter(), AverageMeter(), AverageMeter(), AverageMeter()
 
     model.train()
@@ -176,14 +190,10 @@ def train(args, model, device, train_loader, optimizer, epoch, G, optimizer_G, e
 
         logits_z = encoder(adv)
         mean_z, var_z = logits_z[:, :args.z_dim], F.softplus(logits_z[:, args.z_dim:])
-        # var_z = logvar_z.exp()
-        if args.fixed_var:
-            neg_entropy_ub = -(-((rand_z - mean_z) ** 2) / 2 - math.log(math.sqrt(2 * math.pi))).mean(1).mean(0)
-        else:
-            neg_entropy_ub = -(-((rand_z - mean_z) ** 2) / (2 * var_z+1e-8) - (var_z+1e-8).log()/2. - math.log(math.sqrt(2 * math.pi))).mean(1).mean(0)
+        neg_entropy_ub = -(-((rand_z - mean_z) ** 2) / (2 * var_z+1e-8) - (var_z+1e-8).log()/2. - math.log(math.sqrt(2 * math.pi))).mean(1).mean(0)
         entropies.update(neg_entropy_ub.item(), bs)
 
-        x_adv = torch.clamp(data + args.epsilon * torch.clamp(args.enlarge_factor * adv, -1, 1), 0.0, 1.0)
+        x_adv = torch.clamp(data + args.epsilon * torch.clamp(adv, -1, 1), 0.0, 1.0)
         x_adv.register_hook(grad_inv)
         logits = model(x_adv)
         if args.loss_type == 'normal':
@@ -197,7 +207,6 @@ def train(args, model, device, train_loader, optimizer, epoch, G, optimizer_G, e
             loss = loss_natural + args.beta * loss_robust
         else:
             raise NotImplementedError
-        # print(neg_entropy_ub.item())
 
         (loss + F.relu(neg_entropy_ub-args.entropy_th)*args.lambda).backward()
         optimizer.step()
@@ -215,21 +224,6 @@ def train(args, model, device, train_loader, optimizer, epoch, G, optimizer_G, e
                                     ListToFormattedString([item.avg for item in g_loss]),
                                     ListToFormattedString([item.avg for item in g_loss_robust]),
                                     c_loss.avg, c_loss_robust.avg, loss1.avg, loss2.avg, entropies.avg))
-        # if batch_idx == len(train_loader) - 1:
-        #     model.eval()
-        #     data = data[0:1]
-        #     data.requires_grad_()
-        #     grad = torch.autograd.grad(F.cross_entropy(model(data), target[0:1]), [data])[0].detach()
-        #     data.requires_grad_(False)
-        #     x_pgd = torch.clamp(data + args.epsilon * grad.sign(), 0.0, 1.0).detach()
-        #     x_pgd.requires_grad_()
-        #     grad_2 = torch.autograd.grad(F.cross_entropy(model(x_pgd), target[0:1]), [x_pgd])[0].detach()
-        #     x_pgd.requires_grad_(False)
-        #
-        #     data, grad, grad_2 = data.repeat(100, 1, 1, 1), grad.repeat(100, 1, 1, 1), grad_2.repeat(100, 1, 1, 1)
-        #     rand_z = torch.rand(data.size(0), args.z_dim, device='cuda')*2.-1.
-        #     adv = G(torch.cat([data, grad, grad_2], 1), target, rand_z).tanh()
-        #     print('Sample variance: ', adv.var(0).mean().item())
 
 def eval(model, G, device, train_loader, log_header='Train'):
     model.eval()
@@ -306,8 +300,8 @@ def main():
     model = WideResNet(depth=28, num_classes=100 if args.dataset == 'cifar100' else 10).to(device)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
-    G = define_G(9 + 1, 3, args.ngf_G, args.net_G, not args.no_zero_pad, norm=args.norm_G, no_down_G=not args.down_G, use_relu_atlast=args.use_relu_G, outs=args.outs, use_dropout=args.use_dropout_G, z_dim=args.z_dim)
-    print(G)
+    G = define_G(9 + 1, 3, args.ngf_G, args.net_G, not args.no_zero_pad, norm=args.norm_G, no_down_G=not args.down_G, use_relu_atlast=args.use_relu_G, outs=1, use_dropout=args.use_dropout_G, z_dim=args.z_dim)
+    
     if args.opt_G == 'adam':
         optimizer_G = torch.optim.Adam(G.parameters(), lr=args.lr_G, betas=(args.beta1_G, 0.999))
     elif args.opt_G == 'sgd':
