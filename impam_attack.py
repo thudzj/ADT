@@ -14,7 +14,7 @@ from torchvision import datasets, transforms
 from models.wideresnet import *
 from models.resnet import *
 from trades import trades_loss
-from generator1 import define_G, get_scheduler, set_requires_grad
+from generator import define_G, get_scheduler, set_requires_grad, Encoder
 from fs_wideresnet import WideResNet as fs_WideResNet
 from collections import OrderedDict
 
@@ -65,37 +65,27 @@ parser.add_argument('--niter_decay_G', type=int, default=50,
                     help='# of iter to linearly decay learning rate to zero')
 parser.add_argument('--beta1_G', type=float, default=0.5, 
                     help='momentum term of adam')
-parser.add_argument('--no_zero_pad', action='store_true', default=False, 
-                    help='no_zero_pad')
 parser.add_argument('--load_clf', default=None, help='load_clf')
-parser.add_argument('--down_G', action='store_true', default=False, 
-                    help='down_G')
-parser.add_argument('--use_relu_G', action='store_true', default=False, help='use_relu')
 parser.add_argument('--ngf_G', type=int, default=256, help='# ')
 parser.add_argument('--loss_type', type=str, default='normal', choices=['normal', 'trades'], 
                     help='Use which loss to produce perturbations')
-parser.add_argument('--norm_G', type=str, default='batch', choices=['batch', 'cbn', 'instance'], 
-                    help='Use which to norm')
-parser.add_argument('--use_dropout_G', action='store_true', default=False, 
-                    help='use_dropout_G')
 parser.add_argument('--z_dim', type=int, default=64, 
                     help='z_dim')
-parser.add_argument('--lambda', type=float, default=0.01, 
+parser.add_argument('--lambda', type=float, default=1., 
                     help='entropy weight')
+parser.add_argument('--entropy_th', type=float, default=0.9, 
+                    help='entropy_th')
 parser.add_argument('--dataset', type=str, default='cifar10', 
                     help='dataset')
 parser.add_argument('--pretrained_g', action='store_true', default=False, 
                     help='pretrained_g')
-parser.add_argument('--dist', type=str, default='gaussian', 
-                    help='dist')
 
 args = parser.parse_args()
-args.use_relu_G = True
 
 # settings
-model_dir = args.model_dir
-if not os.path.exists(model_dir):
-    os.makedirs(model_dir)
+# model_dir = args.model_dir
+# if not os.path.exists(model_dir):
+#     os.makedirs(model_dir)
 use_cuda = not args.no_cuda and torch.cuda.is_available()
 torch.manual_seed(args.seed)
 device = torch.device("cuda" if use_cuda else "cpu")
@@ -153,31 +143,14 @@ def grad_inv(grad):
     elif args.loss_type == 'trades':
         return grad.neg()/args.beta
 
-def generate_adv(adv_raw, tau=None, return_entropy=False):
-    entropy = torch.cuda.FloatTensor([0.])
-    if args.dist == 'none':
-        adv = torch.tanh(adv_raw)
-    elif args.dist == 'gaussian':
-        adv_mean = adv_raw[:, :3, :, :]
-        adv_std = F.softplus(adv_raw[:, 3:, :, :])
-        rand_noise = torch.randn_like(adv_std)
-        adv = torch.tanh(adv_mean + rand_noise * adv_std)
-        logp = -(rand_noise ** 2) / 2. - (adv_std + 1e-8).log() - math.log(math.sqrt(2 * math.pi)) - (-adv ** 2 + 1 + 1e-8).log()
-        entropy = logp.mean() #should be called neg entropy
-    else:
-        raise NotImplementedError
-    if return_entropy:
-        return adv, entropy
-    else:
-        return adv
-
-def train(args, model, device, train_loader, optimizer, epoch, G, optimizer_G):
+def train(args, model, device, train_loader, optimizer, epoch, G, optimizer_G, encoder, optimizer_encoder):
     g_loss, g_loss_robust = [], []
     g_loss.append(AverageMeter()); g_loss_robust.append(AverageMeter());
     c_loss, c_loss_robust, entropies, loss1, loss2 = AverageMeter(), AverageMeter(), AverageMeter(), AverageMeter(), AverageMeter()
 
     # model.train()
     G.train()
+    encoder.train()
 
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
@@ -197,22 +170,39 @@ def train(args, model, device, train_loader, optimizer, epoch, G, optimizer_G):
         grad_2 = torch.autograd.grad(loss2_, [x_pgd])[0].detach()
         x_pgd.requires_grad_(False)
 
-        adv_raw_2 = G(torch.cat([data, grad, grad_2], 1))
+        rand_z = torch.rand(data.size(0), args.z_dim, device='cuda')*2.-1.
+        adv = G(torch.cat([data, grad, grad_2], 1), target, rand_z).tanh()
 
+        # model.train()
+        # optimizer.zero_grad()
         optimizer_G.zero_grad()
+        optimizer_encoder.zero_grad()
 
-        adv2, entropy = generate_adv(adv_raw_2, return_entropy=True)
-        entropies.update(entropy.item(), bs)
-        x_adv2 = torch.clamp(data + args.epsilon * torch.clamp(adv2, -1, 1), 0.0, 1.0)
-        x_adv2.register_hook(grad_inv)
-        logits = model(x_adv2)
+        logits_z = encoder(adv)
+        mean_z, var_z = logits_z[:, :args.z_dim], F.softplus(logits_z[:, args.z_dim:])
+        neg_entropy_ub = -(-((rand_z - mean_z) ** 2) / (2 * var_z+1e-8) - (var_z+1e-8).log()/2. - math.log(math.sqrt(2 * math.pi))).mean(1).mean(0)
+        entropies.update(neg_entropy_ub.item(), bs)
 
-        loss_robust = F.cross_entropy(logits, target)
-        loss = loss_robust
+        x_adv = torch.clamp(data + args.epsilon * torch.clamp(adv, -1, 1), 0.0, 1.0)
+        x_adv.register_hook(grad_inv)
+        logits = model(x_adv)
+        if args.loss_type == 'normal':
+            loss_robust = F.cross_entropy(logits, target)
+            loss = loss_robust
+        elif args.loss_type == 'trades':
+            logits_n = model(data)
+            loss_natural = F.cross_entropy(logits_n, target)
+            loss_robust = (1.0 / len(target)) * nn.KLDivLoss(size_average=False)(F.log_softmax(logits, dim=1),
+                                                            F.softmax(logits_n, dim=1))
+            loss = loss_natural + args.beta * loss_robust
+        else:
+            raise NotImplementedError
+        # print(neg_entropy_ub.item())
 
-        ((loss + entropy * args.lambda)).backward()
+        (loss + F.relu(neg_entropy_ub-args.entropy_th)*args.lambda).backward()
         # optimizer.step()
         optimizer_G.step()
+        optimizer_encoder.step()
 
         g_loss[0].update(loss.item(), bs)
         g_loss_robust[0].update(loss_robust.item(), bs)
@@ -237,9 +227,9 @@ def train(args, model, device, train_loader, optimizer, epoch, G, optimizer_G):
             x_pgd.requires_grad_(False)
 
             data, grad, grad_2, target = data.repeat(100, 1, 1, 1), grad.repeat(100, 1, 1, 1), grad_2.repeat(100, 1, 1, 1), target[0:1].repeat(100)
-            adv_raw_2 = G(torch.cat([data, grad, grad_2], 1))
-            adv2, entropy = generate_adv(adv_raw_2, return_entropy=True)
-            print('Sample variance: ', adv2.var(0).mean().item())
+            rand_z = torch.rand(data.size(0), args.z_dim, device='cuda')*2.-1.
+            adv = G(torch.cat([data, grad, grad_2], 1), target, rand_z).tanh()
+            print('Sample variance: ', adv.var(0).mean().item())
 
 def eval(model, G, device, train_loader):
     model.eval()
@@ -263,14 +253,13 @@ def eval(model, G, device, train_loader):
         grad_2 = torch.autograd.grad(loss2_, [x_pgd])[0].detach()
         x_pgd.requires_grad_(False)
 
-        adv_raw_2 = G(torch.cat([data, grad, grad_2], 1))
-
         pred_mask = 1.
         k = 100
         for _ in range(k):
-            adv2, entropy = generate_adv(adv_raw_2, return_entropy=True)
+            rand_z = torch.rand(data.size(0), args.z_dim, device='cuda')*2.-1.
+            adv = G(torch.cat([data, grad, grad_2], 1), target, rand_z).tanh()
 
-            x_adv = torch.clamp(data + args.epsilon * torch.clamp(adv2, -1, 1), 0.0, 1.0).detach()
+            x_adv = torch.clamp(data + args.epsilon * torch.clamp(adv, -1, 1), 0.0, 1.0).detach()
 
             with torch.no_grad():
                 output_adv = model(x_adv)
@@ -316,10 +305,12 @@ def main():
     else:
         raise NotImplementedError
 
-    G = define_G(9, 6, args.ngf_G, args.net_G, not args.no_zero_pad, norm=args.norm_G, no_down_G=not args.down_G, use_relu_atlast=args.use_relu_G, outs=1, use_dropout=args.use_dropout_G)
+    G = define_G(9 + 1, 3, args.ngf_G, args.net_G, True, norm=args.norm_G, no_down_G=True, use_relu_atlast=True, outs=1, use_dropout=False, z_dim=args.z_dim)
+    encoder = Encoder(args.z_dim).cuda()
 
     if args.pretrained_g:
         G.load_state_dict(torch.load('generator_cifar10.pt'))
+        encoder.load_state_dict(torch.load('encoder_cifar10.pt'))
     if args.opt_G == 'adam':
         optimizer_G = torch.optim.Adam(G.parameters(), lr=args.lr_G, betas=(args.beta1_G, 0.999))
     elif args.opt_G == 'sgd':
@@ -327,15 +318,19 @@ def main():
     else:
         raise NotImplementedError
     scheduler_G = get_scheduler(optimizer_G, args)
+    optimizer_encoder = torch.optim.Adam(encoder.parameters(), lr=2e-4)
 
     print('  + Number of params of classifier: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
     print('  + Number of params of generator: {}'.format(sum([p.data.nelement() for p in G.parameters()])))
+    print('  + Number of params of generator: {}'.format(sum([p.data.nelement() for p in encoder.parameters()])))
 
     for epoch in range(1, args.epochs + 1):
+
         # adversarial training
-        train(args, model, device, train_loader, None, epoch, G, optimizer_G)
+        train(args, model, device, train_loader, None, epoch, G, optimizer_G, encoder, optimizer_encoder)
         if epoch > 400 and epoch % 25 == 0:
             eval(model, G, device, test_loader)
+
 
 if __name__ == '__main__':
     main()

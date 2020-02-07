@@ -14,7 +14,7 @@ from torchvision import datasets, transforms
 from models.wideresnet import *
 from models.resnet import *
 from trades import trades_loss
-from generator1 import define_G, get_scheduler, set_requires_grad
+from generator import define_G, get_scheduler, set_requires_grad
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR TRADES Adversarial Training')
 parser.add_argument('--batch-size', type=int, default=64, metavar='N',
@@ -63,34 +63,20 @@ parser.add_argument('--niter_decay_G', type=int, default=50,
                     help='# of iter to linearly decay learning rate to zero')
 parser.add_argument('--beta1_G', type=float, default=0.5, 
                     help='momentum term of adam')
-parser.add_argument('--no_zero_pad', action='store_true', default=False, 
-                    help='no_zero_pad for G')
 parser.add_argument('--load_clf', default=None, 
                     help='load_clf')
-parser.add_argument('--down_G', action='store_true', default=False, 
-                    help='down_G')
-parser.add_argument('--use_relu_G', action='store_true', default=False, 
-                    help='use_relu')
 parser.add_argument('--ngf_G', type=int, default=256, 
                     help='# ')
-parser.add_argument('--dist', type=str, default='gaussian', 
-                    choices=['none', 'gaussian', 'bernoulli_repara', 'bernoulli_repara_hard', 'bernoulli_st'], 
-                    help='Use which distribution to produce perturbations')
 parser.add_argument('--loss_type', type=str, default='normal', choices=['normal', 'trades'], 
                     help='Use which loss to produce perturbations')
 parser.add_argument('--num_samples', type=int, default=1, 
                     help='# of out samples')
 parser.add_argument('--lambda', type=float, default=0.01, 
                     help='entropy weight')
-parser.add_argument('--norm_G', type=str, default='batch', choices=['batch', 'cbn', 'instance'], 
-                    help='Use which to norm')
-parser.add_argument('--use_dropout_G', action='store_true', default=False, 
-                    help='use_dropout_G')
 parser.add_argument('--dataset', type=str, default='cifar10', 
                     help='dataset')
 
 args = parser.parse_args()
-args.use_relu_G = True
 
 # settings
 model_dir = args.model_dir
@@ -153,18 +139,12 @@ def grad_inv(grad):
         return grad.neg()/args.beta
 
 def generate_adv(adv_raw, return_entropy=False):
-    entropy = torch.cuda.FloatTensor([0.])
-    if args.dist == 'none':
-        adv = torch.tanh(adv_raw)
-    elif args.dist == 'gaussian':
-        adv_mean = adv_raw[:, :3, :, :]
-        adv_std = F.softplus(adv_raw[:, 3:, :, :])
-        rand_noise = torch.randn_like(adv_std)
-        adv = torch.tanh(adv_mean + rand_noise * adv_std)
-        logp = -(rand_noise ** 2) / 2. - (adv_std + 1e-8).log() - math.log(math.sqrt(2 * math.pi)) - (-adv ** 2 + 1 + 1e-8).log()
-        entropy = logp.mean() #should be called neg entropy
-    else:
-        raise NotImplementedError
+    adv_mean = adv_raw[:, :3, :, :]
+    adv_std = F.softplus(adv_raw[:, 3:, :, :])
+    rand_noise = torch.randn_like(adv_std)
+    adv = torch.tanh(adv_mean + rand_noise * adv_std)
+    logp = -(rand_noise ** 2) / 2. - (adv_std + 1e-8).log() - math.log(math.sqrt(2 * math.pi)) - (-adv ** 2 + 1 + 1e-8).log()
+    entropy = logp.mean() #should be called neg entropy
     if return_entropy:
         return adv, entropy
     else:
@@ -315,7 +295,7 @@ def main():
     model = WideResNet(depth=28, num_classes=100 if args.dataset == 'cifar100' else 10).to(device)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
-    G = define_G(9, 6 if args.dist == 'gaussian' else 3, args.ngf_G, args.net_G, not args.no_zero_pad, norm=args.norm_G, no_down_G=not args.down_G, use_relu_atlast=args.use_relu_G, outs=1, use_dropout=args.use_dropout_G)
+    G = define_G(9, 6, args.ngf_G, args.net_G, True, norm='batch', no_down_G=True, use_relu_atlast=True, outs=1, use_dropout=False)
     print(G)
     if args.opt_G == 'adam':
         optimizer_G = torch.optim.Adam(G.parameters(), lr=args.lr_G, betas=(args.beta1_G, 0.999))
