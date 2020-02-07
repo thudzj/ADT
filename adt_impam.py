@@ -69,7 +69,7 @@ parser.add_argument('--norm_G', type=str, default='batch', choices=['batch', 'cb
 parser.add_argument('--use_dropout_G', action='store_true', default=False, help='use_dropout_G')
 parser.add_argument('--enlarge-factor', type=float, default=1.0, help='Enlarge factor for perturbation')
 parser.add_argument('--z_dim', type=int, default=64, help='z_dim')
-parser.add_argument('--entropy', type=float, default=1., help='entropy weight')
+parser.add_argument('--lambda', type=float, default=1., help='entropy weight')
 parser.add_argument('--entropy_th', type=float, default=0.9, help='entropy_th')
 parser.add_argument('--fixed_var', action='store_true', default=False, help='fixed_var')
 parser.add_argument('--dataset', type=str, default='cifar10', help='dataset')
@@ -199,7 +199,7 @@ def train(args, model, device, train_loader, optimizer, epoch, G, optimizer_G, e
             raise NotImplementedError
         # print(neg_entropy_ub.item())
 
-        (loss + F.relu(neg_entropy_ub-args.entropy_th)*args.entropy).backward()
+        (loss + F.relu(neg_entropy_ub-args.entropy_th)*args.lambda).backward()
         optimizer.step()
         optimizer_G.step()
         optimizer_encoder.step()
