@@ -17,32 +17,8 @@ from trades import trades_loss
 from generator_implicit import define_G, get_scheduler, set_requires_grad, Encoder
 import time
 
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent0_bs64 --batch-size 64 --entropy 0.
-# natural_err_total:  tensor(1222., device='cuda:0') robust_err_total:  tensor(4827., device='cuda:0')
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent1_bs64_th0.9 --batch-size 64 --entropy 1. --entropy_th 0.9
-# natural_err_total:  tensor(1200., device='cuda:0') robust_err_total:  tensor(4767., device='cuda:0')
-
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent0_bs64_trades --batch-size 64 --entropy 0. --loss_type trades
-# natural_err_total:  tensor(1697., device='cuda:0') robust_err_total:  tensor(4504., device='cuda:0')
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent1_bs64_th0.9_trades --batch-size 64 --entropy 1. --entropy_th 0.9 --loss_type trades
-# natural_err_total:  tensor(1605., device='cuda:0') robust_err_total:  tensor(4411., device='cuda:0')
-
-# CIFAR100
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent1_bs64_th0.9_cifar100 --batch-size 64 --entropy 1. --entropy_th 0.9  --dataset cifar100
-# natural_err_total:  tensor(3593., device='cuda:0')  robust_err_total:  tensor(7062., device='cuda:0')
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent0_bs64_cifar100 --batch-size 64 --entropy 0. --dataset cifar100
-# natural_err_total:  tensor(3617., device='cuda:0') robust_err_total:  tensor(7096., device='cuda:0')
-
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent1_bs64_th0.9_trades_cifar100 --batch-size 64 --entropy 1. --entropy_th 0.9 --loss_type trades --dataset cifar100
-# natural_err_total:  tensor(4044., device='cuda:0') robust_err_total:  tensor(7385., device='cuda:0')
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent0_bs64_trades_cifar100 --batch-size 64 --entropy 0. --loss_type trades --dataset cifar100
-# natural_err_total:  tensor(3997., device='cuda:0') robust_err_total:  tensor(6864., device='cuda:0')
-
-# svhn
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent1_bs64_th0.9_svhn_smalllr --batch-size 64 --entropy 1. --entropy_th 0.9 --dataset svhn --lr 0.1
-# natural_err_total:  tensor(1603., device='cuda:0') robust_err_total:  tensor(12662., device='cuda:0')
 parser = argparse.ArgumentParser(description='PyTorch CIFAR TRADES Adversarial Training')
-parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                     help='input batch size for training (default: 128)')
 parser.add_argument('--test-batch-size', type=int, default=128, metavar='N',
                     help='input batch size for testing (default: 128)')
@@ -93,8 +69,8 @@ parser.add_argument('--norm_G', type=str, default='batch', choices=['batch', 'cb
 parser.add_argument('--use_dropout_G', action='store_true', default=False, help='use_dropout_G')
 parser.add_argument('--enlarge-factor', type=float, default=1.0, help='Enlarge factor for perturbation')
 parser.add_argument('--z_dim', type=int, default=64, help='z_dim')
-parser.add_argument('--entropy', type=float, default=0., help='entropy weight')
-parser.add_argument('--entropy_th', type=float, default=-100., help='entropy_th')
+parser.add_argument('--entropy', type=float, default=1., help='entropy weight')
+parser.add_argument('--entropy_th', type=float, default=0.9, help='entropy_th')
 parser.add_argument('--fixed_var', action='store_true', default=False, help='fixed_var')
 parser.add_argument('--dataset', type=str, default='cifar10', help='dataset')
 
