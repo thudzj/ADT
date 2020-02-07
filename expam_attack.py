@@ -14,7 +14,7 @@ from torchvision import datasets, transforms
 from models.wideresnet import *
 from models.resnet import *
 from trades import trades_loss
-from generator import define_G, get_scheduler, set_requires_grad
+from generator1 import define_G, get_scheduler, set_requires_grad
 from fs_wideresnet import WideResNet as fs_WideResNet
 from collections import OrderedDict
 
