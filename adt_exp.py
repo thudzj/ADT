@@ -13,7 +13,7 @@ from models.resnet import *
 from trades import trades_loss, pgd_loss, distrib_loss, fgsm_loss, distrib_trades_loss, alp_loss
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR TRADES Adversarial Training')
-parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                     help='input batch size for training (default: 128)')
 parser.add_argument('--test-batch-size', type=int, default=128, metavar='N',
                     help='input batch size for testing (default: 128)')
@@ -31,7 +31,7 @@ parser.add_argument('--epsilon', default=8.0/255.0,
                     help='perturbation')
 parser.add_argument('--num-steps', type=int, default=7,
                     help='perturb number of steps')
-parser.add_argument('--step-size', type=float, default=2.0/255.0,
+parser.add_argument('--step-size', type=float, default=0.3,
                     help='perturb step size')
 parser.add_argument('--beta', type=float, default=6.0,
                     help='regularization, i.e., 1/lambda in TRADES')
@@ -43,10 +43,10 @@ parser.add_argument('--model-dir', default='./model-cifar-wideResNet',
                     help='directory of model for saving checkpoint')
 parser.add_argument('--save-freq', '-s', default=5, type=int, metavar='N',
                     help='save frequency')
-parser.add_argument('--loss-type', type=str, default='cross_entropy', 
+parser.add_argument('--loss-type', type=str, default='gaussian', 
                     choices=['cross_entropy', 'trades', 'gaussian', 'standard', 'FGSM-ll', 'gaussian-trades', 'alp'],
                     help='loss type for training')
-parser.add_argument('--entropy', type=float, default=0.0,
+parser.add_argument('--entropy', type=float, default=0.01,
                     help='entropy weight')
 parser.add_argument('--dataset', type=str, default='cifar10', help='dataset')
 
