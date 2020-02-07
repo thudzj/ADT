@@ -4,13 +4,13 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 import torchvision
 import torch.optim as optim
 from torchvision import datasets, transforms
 
 from models.wideresnet import *
 from models.resnet import *
-from trades import trades_loss, pgd_loss, distrib_loss, fgsm_loss, distrib_trades_loss, alp_loss
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR TRADES Adversarial Training')
 parser.add_argument('--batch-size', type=int, default=64, metavar='N',
@@ -33,8 +33,6 @@ parser.add_argument('--num-steps', type=int, default=7,
                     help='perturb number of steps')
 parser.add_argument('--step-size', type=float, default=0.3,
                     help='perturb step size')
-parser.add_argument('--beta', type=float, default=6.0,
-                    help='regularization, i.e., 1/lambda in TRADES')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=100, metavar='N',
@@ -43,14 +41,12 @@ parser.add_argument('--model-dir', default='./model-cifar-wideResNet',
                     help='directory of model for saving checkpoint')
 parser.add_argument('--save-freq', '-s', default=5, type=int, metavar='N',
                     help='save frequency')
-parser.add_argument('--loss-type', type=str, default='gaussian', 
-                    choices=['cross_entropy', 'trades', 'gaussian', 'standard', 'FGSM-ll', 'gaussian-trades', 'alp'],
-                    help='loss type for training')
-parser.add_argument('--lambda', type=float, default=0.01,
-                    help='entropy weight')
+parser.add_argument('--lbd', type=float, default=0.01,
+                    help='lambda for the entropy term')
 parser.add_argument('--dataset', type=str, default='cifar10', help='dataset')
 
 args = parser.parse_args()
+print(args)
 
 # settings
 model_dir = args.model_dir
@@ -81,9 +77,53 @@ elif args.dataset == 'svhn':
     testset = torchvision.datasets.SVHN(root='../data', split='test', download=True, transform=transform_test)
 else:
     raise NotImplementedError
+
 train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, **kwargs)
 test_loader = torch.utils.data.DataLoader(testset, batch_size=args.test_batch_size, shuffle=False, **kwargs)
 
+def adt_loss(model,
+             x_natural,
+             y,
+             optimizer,
+             learning_rate=1.0,
+             epsilon=8.0/255.0,
+             perturb_steps=10,
+             num_samples=10,
+             lbd=0.0):
+
+    model.eval()
+    batch_size = len(x_natural)
+    # generate adversarial example
+    mean = Variable(torch.zeros(x_natural.size()).cuda(), requires_grad=True)
+    var = Variable(torch.zeros(x_natural.size()).cuda(), requires_grad=True)
+    optimizer_adv = optim.Adam([mean, var], lr=learning_rate, betas=(0.0, 0.0))
+
+    for _ in range(perturb_steps):
+        for s in range(num_samples):
+            adv_std = F.softplus(var)
+            rand_noise = torch.randn_like(x_natural)
+            adv = torch.tanh(mean + rand_noise * adv_std)
+            # omit the constants in -logp
+            negative_logp = (rand_noise ** 2) / 2. + (adv_std + 1e-8).log() + (1 - adv ** 2 + 1e-8).log()
+            entropy = negative_logp.mean() # entropy
+            x_adv = torch.clamp(x_natural + epsilon * adv, 0.0, 1.0)
+
+            # minimize the negative loss
+            with torch.enable_grad():
+                loss = -F.cross_entropy(model(x_adv), y) - lbd * entropy
+            loss.backward(retain_graph=True if s != num_samples - 1 else False)
+
+        optimizer_adv.step()
+    
+    x_adv = torch.clamp(x_natural + epsilon * torch.tanh(mean + F.softplus(var) * torch.randn_like(x_natural)), 0.0, 1.0)
+    model.train()
+    x_adv = Variable(torch.clamp(x_adv, 0.0, 1.0), requires_grad=False)
+    # zero gradient
+    optimizer.zero_grad()
+    # calculate robust loss
+    logits = model(x_adv)
+    loss = F.cross_entropy(logits, y)
+    return loss
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
@@ -92,68 +132,15 @@ def train(args, model, device, train_loader, optimizer, epoch):
 
         optimizer.zero_grad()
 
-        # calculate robust loss
-        if args.loss_type == 'trades':
-            loss = trades_loss(model=model,
-                               x_natural=data,
-                               y=target,
-                               optimizer=optimizer,
-                               step_size=args.step_size,
-                               epsilon=args.epsilon,
-                               perturb_steps=args.num_steps,
-                               beta=args.beta)
-
-        elif args.loss_type == 'cross_entropy':
-            loss = pgd_loss(model=model,
-                            x_natural=data,
-                            y=target,
-                            optimizer=optimizer,
-                            step_size=args.step_size,
-                            epsilon=args.epsilon,
-                            perturb_steps=args.num_steps)
-
-        elif args.loss_type == 'gaussian':
-            loss = distrib_loss(model=model,
-                                x_natural=data,
-                                y=target,
-                                optimizer=optimizer,
-                                learning_rate=args.step_size,
-                                epsilon=args.epsilon,
-                                perturb_steps=args.num_steps,
-                                num_samples=5,
-                                entropy_weight=args.lambda)
-        
-        elif args.loss_type == 'standard':
-            loss = F.cross_entropy(model(data), target)
-
-        elif args.loss_type == 'FGSM-ll':
-            loss = fgsm_loss(model=model,
-                             x_natural=data,
-                             y=target,
-                             optimizer=optimizer,
-                             epsilon=args.epsilon)
-
-        elif args.loss_type == 'gaussian-trades':
-            loss = distrib_trades_loss(model=model,
-                                       x_natural=data,
-                                       y=target,
-                                       optimizer=optimizer,
-                                       learning_rate=args.step_size,
-                                       epsilon=args.epsilon,
-                                       perturb_steps=args.num_steps,
-                                       num_samples=5,
-                                       entropy_weight=args.lambda,
-                                       beta=args.beta)
-
-        elif args.loss_type == 'alp':
-            loss = alp_loss(model=model,
-                            x_natural=data,
-                            y=target,
-                            optimizer=optimizer,
-                            step_size=args.step_size,
-                            epsilon=args.epsilon,
-                            perturb_steps=args.num_steps,
-                            beta=args.beta)
+        loss = adt_loss(model=model,
+                        x_natural=data,
+                        y=target,
+                        optimizer=optimizer,
+                        learning_rate=args.step_size,
+                        epsilon=args.epsilon,
+                        perturb_steps=args.num_steps,
+                        num_samples=5,
+                        lbd=args.lbd)
 
         loss.backward()
         optimizer.step()
@@ -220,20 +207,19 @@ def main():
     # init model, ResNet18() can be also used here for training
     model = WideResNet(depth=28, num_classes=100 if args.dataset == 'cifar100' else 10).to(device)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-    import time
+
     for epoch in range(1, args.epochs + 1):
         # adjust learning rate for SGD
         adjust_learning_rate(optimizer, epoch)
-        start_time = time.time()
+
         # adversarial training
         train(args, model, device, train_loader, optimizer, epoch)
-        print(time.time() - start_time)
 
         # evaluation on natural examples
-        #print('================================================================')
-        #eval_train(model, device, train_loader)
-        #eval_test(model, device, test_loader)
-        #print('================================================================')
+        print('================================================================')
+        eval_train(model, device, train_loader)
+        eval_test(model, device, test_loader)
+        print('================================================================')
 
         # save checkpoint
         if epoch % args.save_freq == 0 or epoch > 70:
