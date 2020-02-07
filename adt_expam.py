@@ -17,7 +17,7 @@ from trades import trades_loss
 from generator_zhijie import define_G, get_scheduler, set_requires_grad
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR TRADES Adversarial Training')
-parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                     help='input batch size for training (default: 128)')
 parser.add_argument('--test-batch-size', type=int, default=128, metavar='N',
                     help='input batch size for testing (default: 128)')
@@ -63,12 +63,12 @@ parser.add_argument('--load_clf', default=None, help='load_clf')
 parser.add_argument('--down_G', action='store_true', default=False, help='down_G')
 parser.add_argument('--use_relu_G', action='store_true', default=False, help='use_relu')
 parser.add_argument('--ngf_G', type=int, default=256, help='# ')
-parser.add_argument('--dist', type=str, default='none', choices=['none', 'gaussian', 'bernoulli_repara', 'bernoulli_repara_hard', 'bernoulli_st'], help='Use which distribution to produce perturbations')
+parser.add_argument('--dist', type=str, default='gaussian', choices=['none', 'gaussian', 'bernoulli_repara', 'bernoulli_repara_hard', 'bernoulli_st'], help='Use which distribution to produce perturbations')
 parser.add_argument('--tau', type=float, default=1., help='Temperature for the gumbel softmax (sigmoid) trick')
 parser.add_argument('--loss_type', type=str, default='normal', choices=['normal', 'trades'], help='Use which loss to produce perturbations')
 parser.add_argument('--outs', type=int, default=1, help='# of out samples')
 parser.add_argument('--num_samples', type=int, default=1, help='# of out samples')
-parser.add_argument('--entropy', type=float, default=0., help='entropy weight')
+parser.add_argument('--entropy', type=float, default=0.01, help='entropy weight')
 parser.add_argument('--entropy_th', type=float, default=-6., help='entropy_th')
 # parser.add_argument('--grad_renorm', action='store_true', default=False, help='grad_renorm')
 # parser.add_argument('--gram_pal', type=float, default=1., help='gram_pal')
