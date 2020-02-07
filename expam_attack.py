@@ -14,7 +14,7 @@ from torchvision import datasets, transforms
 from models.wideresnet import *
 from models.resnet import *
 from trades import trades_loss
-from generator1 import define_G, get_scheduler, set_requires_grad
+from generator import define_G, get_scheduler, set_requires_grad
 from fs_wideresnet import WideResNet as fs_WideResNet
 from collections import OrderedDict
 
@@ -65,19 +65,10 @@ parser.add_argument('--niter_decay_G', type=int, default=50,
                     help='# of iter to linearly decay learning rate to zero')
 parser.add_argument('--beta1_G', type=float, default=0.5, 
                     help='momentum term of adam')
-parser.add_argument('--no_zero_pad', action='store_true', default=False, 
-                    help='no_zero_pad')
 parser.add_argument('--load_clf', default=None, help='load_clf')
-parser.add_argument('--down_G', action='store_true', default=False, 
-                    help='down_G')
-parser.add_argument('--use_relu_G', action='store_true', default=False, help='use_relu')
 parser.add_argument('--ngf_G', type=int, default=256, help='# ')
 parser.add_argument('--loss_type', type=str, default='normal', choices=['normal', 'trades'], 
                     help='Use which loss to produce perturbations')
-parser.add_argument('--norm_G', type=str, default='batch', choices=['batch', 'cbn', 'instance'], 
-                    help='Use which to norm')
-parser.add_argument('--use_dropout_G', action='store_true', default=False, 
-                    help='use_dropout_G')
 parser.add_argument('--z_dim', type=int, default=64, 
                     help='z_dim')
 parser.add_argument('--lambda', type=float, default=0.01, 
@@ -86,11 +77,8 @@ parser.add_argument('--dataset', type=str, default='cifar10',
                     help='dataset')
 parser.add_argument('--pretrained_g', action='store_true', default=False, 
                     help='pretrained_g')
-parser.add_argument('--dist', type=str, default='gaussian', 
-                    help='dist')
 
 args = parser.parse_args()
-args.use_relu_G = True
 
 # settings
 model_dir = args.model_dir
@@ -154,18 +142,14 @@ def grad_inv(grad):
         return grad.neg()/args.beta
 
 def generate_adv(adv_raw, tau=None, return_entropy=False):
-    entropy = torch.cuda.FloatTensor([0.])
-    if args.dist == 'none':
-        adv = torch.tanh(adv_raw)
-    elif args.dist == 'gaussian':
-        adv_mean = adv_raw[:, :3, :, :]
-        adv_std = F.softplus(adv_raw[:, 3:, :, :])
-        rand_noise = torch.randn_like(adv_std)
-        adv = torch.tanh(adv_mean + rand_noise * adv_std)
-        logp = -(rand_noise ** 2) / 2. - (adv_std + 1e-8).log() - math.log(math.sqrt(2 * math.pi)) - (-adv ** 2 + 1 + 1e-8).log()
-        entropy = logp.mean() #should be called neg entropy
-    else:
-        raise NotImplementedError
+
+    adv_mean = adv_raw[:, :3, :, :]
+    adv_std = F.softplus(adv_raw[:, 3:, :, :])
+    rand_noise = torch.randn_like(adv_std)
+    adv = torch.tanh(adv_mean + rand_noise * adv_std)
+    logp = -(rand_noise ** 2) / 2. - (adv_std + 1e-8).log() - math.log(math.sqrt(2 * math.pi)) - (-adv ** 2 + 1 + 1e-8).log()
+    entropy = logp.mean() #should be called neg entropy
+
     if return_entropy:
         return adv, entropy
     else:
@@ -316,7 +300,7 @@ def main():
     else:
         raise NotImplementedError
 
-    G = define_G(9, 6, args.ngf_G, args.net_G, not args.no_zero_pad, norm=args.norm_G, no_down_G=not args.down_G, use_relu_atlast=args.use_relu_G, outs=1, use_dropout=args.use_dropout_G)
+    G = define_G(9, 6, args.ngf_G, args.net_G, True, norm='batch', no_down_G=True, use_relu_atlast=True, outs=1, use_dropout=False)
 
     if args.pretrained_g:
         G.load_state_dict(torch.load('generator_cifar10.pt'))

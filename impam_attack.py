@@ -14,7 +14,7 @@ from torchvision import datasets, transforms
 from models.wideresnet import *
 from models.resnet import *
 from trades import trades_loss
-from generator_implicit import define_G, get_scheduler, set_requires_grad, Encoder
+from generator import define_G, get_scheduler, set_requires_grad, Encoder
 from fs_wideresnet import WideResNet as fs_WideResNet
 from collections import OrderedDict
 
@@ -65,20 +65,10 @@ parser.add_argument('--niter_decay_G', type=int, default=50,
                     help='# of iter to linearly decay learning rate to zero')
 parser.add_argument('--beta1_G', type=float, default=0.5, 
                     help='momentum term of adam')
-parser.add_argument('--no_zero_pad', action='store_true', default=False, 
-                    help='no_zero_pad')
 parser.add_argument('--load_clf', default=None, help='load_clf')
-parser.add_argument('--down_G', action='store_true', default=False, 
-                    help='down_G')
-parser.add_argument('--use_relu_G', action='store_true', default=False, 
-                    help='use_relu')
 parser.add_argument('--ngf_G', type=int, default=256, help='# ')
 parser.add_argument('--loss_type', type=str, default='normal', choices=['normal', 'trades'], 
                     help='Use which loss to produce perturbations')
-parser.add_argument('--norm_G', type=str, default='batch', choices=['batch', 'cbn', 'instance'], 
-                    help='Use which to norm')
-parser.add_argument('--use_dropout_G', action='store_true', default=False, 
-                    help='use_dropout_G')
 parser.add_argument('--z_dim', type=int, default=64, 
                     help='z_dim')
 parser.add_argument('--lambda', type=float, default=1., 
@@ -91,7 +81,6 @@ parser.add_argument('--pretrained_g', action='store_true', default=False,
                     help='pretrained_g')
 
 args = parser.parse_args()
-args.use_relu_G = True
 
 # settings
 # model_dir = args.model_dir
@@ -316,12 +305,7 @@ def main():
     else:
         raise NotImplementedError
 
-
-    # model = WideResNet(depth=28, num_classes=100 if args.dataset == 'cifar100' else 10).to(device)
-    # optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-
-    G = define_G(9 + 1, 3, args.ngf_G, args.net_G, not args.no_zero_pad, norm=args.norm_G, no_down_G=not args.down_G, use_relu_atlast=args.use_relu_G, outs=1, use_dropout=args.use_dropout_G, z_dim=args.z_dim)
-    # print(G)
+    G = define_G(9 + 1, 3, args.ngf_G, args.net_G, True, norm=args.norm_G, no_down_G=True, use_relu_atlast=True, outs=1, use_dropout=False, z_dim=args.z_dim)
     encoder = Encoder(args.z_dim).cuda()
 
     if args.pretrained_g:
@@ -340,38 +324,13 @@ def main():
     print('  + Number of params of generator: {}'.format(sum([p.data.nelement() for p in G.parameters()])))
     print('  + Number of params of generator: {}'.format(sum([p.data.nelement() for p in encoder.parameters()])))
 
-    # if args.load_clf:
-    #     model.load_state_dict(torch.load(args.load_clf))
-    #     G.load_state_dict(torch.load(args.load_clf.replace('model-wideres', 'generator')))
-    #     debug(args, model, device, train_loader, optimizer, 0, G, optimizer_G)
-
-    # eval(model, G, device, test_loader)
     for epoch in range(1, args.epochs + 1):
-        # adjust learning rate for SGD
-        # adjust_learning_rate(optimizer, epoch)
 
         # adversarial training
         train(args, model, device, train_loader, None, epoch, G, optimizer_G, encoder, optimizer_encoder)
-        # scheduler_G.step()
-
-
         if epoch > 400 and epoch % 25 == 0:
             eval(model, G, device, test_loader)
 
-        # save checkpoint
-        # if epoch % args.save_freq == 0 or epoch > 70:
-        #     # torch.save(model.state_dict(),
-        #     #            os.path.join(model_dir, 'model-wideres-epoch{}.pt'.format(epoch)))
-        #     # torch.save(optimizer.state_dict(),
-        #     #            os.path.join(model_dir, 'opt-wideres-checkpoint_epoch{}.tar'.format(epoch)))
-        #     torch.save(G.state_dict(),
-        #                os.path.join(model_dir, 'generator-epoch{}.pt'.format(epoch)))
-        #     torch.save(optimizer_G.state_dict(),
-        #                os.path.join(model_dir, 'optG_epoch{}.tar'.format(epoch)))
-        #     torch.save(encoder.state_dict(),
-        #                os.path.join(model_dir, 'encoder-epoch{}.pt'.format(epoch)))
-        #     torch.save(optimizer_encoder.state_dict(),
-        #                os.path.join(model_dir, 'opt-encoder_epoch{}.tar'.format(epoch)))
 
 if __name__ == '__main__':
     main()

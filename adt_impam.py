@@ -14,7 +14,7 @@ from torchvision import datasets, transforms
 from models.wideresnet import *
 from models.resnet import *
 from trades import trades_loss
-from generator_implicit import define_G, get_scheduler, set_requires_grad, Encoder
+from generator import define_G, get_scheduler, set_requires_grad, Encoder
 import time
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR TRADES Adversarial Training')
@@ -64,22 +64,14 @@ parser.add_argument('--niter_decay_G', type=int, default=50,
                     help='# of iter to linearly decay learning rate to zero')
 parser.add_argument('--beta1_G', type=float, default=0.5, 
                     help='momentum term of adam')
-parser.add_argument('--no_zero_pad', action='store_true', default=False, 
-                    help='no_zero_pad')
 parser.add_argument('--load_clf', default=None, 
                     help='load_clf')
-parser.add_argument('--down_G', action='store_true', default=False, 
-                    help='down_G')
-parser.add_argument('--use_relu_G', action='store_true', default=False, 
-                    help='use_relu')
 parser.add_argument('--ngf_G', type=int, default=256, 
                     help='# ')
 parser.add_argument('--loss_type', type=str, default='normal', choices=['normal', 'trades'], 
                     help='Use which loss to produce perturbations')
 parser.add_argument('--norm_G', type=str, default='batch', choices=['batch', 'cbn', 'instance'], 
                     help='Use which to norm')
-parser.add_argument('--use_dropout_G', action='store_true', default=False, 
-                    help='use_dropout_G')
 parser.add_argument('--z_dim', type=int, default=64, 
                     help='z_dim')
 parser.add_argument('--lambda', type=float, default=1., 
@@ -90,7 +82,6 @@ parser.add_argument('--dataset', type=str, default='cifar10',
                     help='dataset')
 
 args = parser.parse_args()
-args.use_relu_G = True
 
 # settings
 model_dir = args.model_dir
@@ -300,7 +291,7 @@ def main():
     model = WideResNet(depth=28, num_classes=100 if args.dataset == 'cifar100' else 10).to(device)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
-    G = define_G(9 + 1, 3, args.ngf_G, args.net_G, not args.no_zero_pad, norm=args.norm_G, no_down_G=not args.down_G, use_relu_atlast=args.use_relu_G, outs=1, use_dropout=args.use_dropout_G, z_dim=args.z_dim)
+    G = define_G(9 + 1, 3, args.ngf_G, args.net_G, True, norm=args.norm_G, no_down_G=True, use_relu_atlast=True, outs=1, use_dropout=False, z_dim=args.z_dim)
     
     if args.opt_G == 'adam':
         optimizer_G = torch.optim.Adam(G.parameters(), lr=args.lr_G, betas=(args.beta1_G, 0.999))
