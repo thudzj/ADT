@@ -18,30 +18,6 @@ from generator import define_G, get_scheduler, set_requires_grad
 from fs_wideresnet import WideResNet as fs_WideResNet
 from collections import OrderedDict
 
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent0_bs64 --batch-size 64 --entropy 0.
-# natural_err_total:  tensor(1222., device='cuda:0') robust_err_total:  tensor(4827., device='cuda:0')
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent1_bs64_th0.9 --batch-size 64 --entropy 1. --entropy_th 0.9
-# natural_err_total:  tensor(1200., device='cuda:0') robust_err_total:  tensor(4767., device='cuda:0')
-
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent0_bs64_trades --batch-size 64 --entropy 0. --loss_type trades
-# natural_err_total:  tensor(1697., device='cuda:0') robust_err_total:  tensor(4504., device='cuda:0')
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent1_bs64_th0.9_trades --batch-size 64 --entropy 1. --entropy_th 0.9 --loss_type trades
-# natural_err_total:  tensor(1605., device='cuda:0') robust_err_total:  tensor(4411., device='cuda:0')
-
-# CIFAR100
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent1_bs64_th0.9_cifar100 --batch-size 64 --entropy 1. --entropy_th 0.9  --dataset cifar100
-# natural_err_total:  tensor(3593., device='cuda:0')  robust_err_total:  tensor(7062., device='cuda:0')
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent0_bs64_cifar100 --batch-size 64 --entropy 0. --dataset cifar100
-# natural_err_total:  tensor(3617., device='cuda:0') robust_err_total:  tensor(7096., device='cuda:0')
-
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent1_bs64_th0.9_trades_cifar100 --batch-size 64 --entropy 1. --entropy_th 0.9 --loss_type trades --dataset cifar100
-# natural_err_total:  tensor(4044., device='cuda:0') robust_err_total:  tensor(7385., device='cuda:0')
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent0_bs64_trades_cifar100 --batch-size 64 --entropy 0. --loss_type trades --dataset cifar100
-# natural_err_total:  tensor(3997., device='cuda:0') robust_err_total:  tensor(6864., device='cuda:0')
-
-# svhn
-# python train_implicit.py --model-dir /data/zhijie/implicit_ent1_bs64_th0.9_svhn_smalllr --batch-size 64 --entropy 1. --entropy_th 0.9 --dataset svhn --lr 0.1
-# natural_err_total:  tensor(1603., device='cuda:0') robust_err_total:  tensor(12662., device='cuda:0')
 parser = argparse.ArgumentParser(description='PyTorch CIFAR TRADES Adversarial Training')
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
@@ -326,29 +302,29 @@ def main():
     # init model, ResNet18() can be also used here for training
     if args.load_clf == 'fs':
         model = fs_WideResNet(28,num_classes=100 if args.dataset == 'cifar100' else 10).to(device)
-        checkpoint = torch.load('/home/zhijie/TRADES_dyp/FS/checkpoint-199-ipot.dms')['net']
+        checkpoint = torch.load('./FS/checkpoint-199-ipot.dms')['net']
         new_state_dict = OrderedDict()
         for key, value in checkpoint.items():
             new_state_dict[key[17:]] = value
         model.load_state_dict(new_state_dict)
     elif args.load_clf == 'pgd':
         model = WideResNet(28,num_classes=100 if args.dataset == 'cifar100' else 10).to(device)
-        model.load_state_dict(torch.load('/home/zhijie/TRADES_dyp/checkpoint_eval/pgd7.pt'))
+        model.load_state_dict(torch.load('./checkpoint_eval/pgd7.pt'))
     elif args.load_clf == 'gaussian':
         model = WideResNet(28,num_classes=100 if args.dataset == 'cifar100' else 10).to(device)
-        model.load_state_dict(torch.load('/home/zhijie/TRADES_dyp/checkpoint_eval/gaussian-entropy-0.01-bs64.pt'))
+        model.load_state_dict(torch.load('./checkpoint_eval/gaussian-entropy-0.01-bs64.pt'))
     elif args.load_clf == 'implicit':
         model = WideResNet(28,num_classes=100 if args.dataset == 'cifar100' else 10).to(device)
-        model.load_state_dict(torch.load('/home/zhijie/TRADES_dyp/checkpoint_eval/implicit.pt'))
+        model.load_state_dict(torch.load('./checkpoint_eval/implicit.pt'))
     elif args.load_clf == 'standard':
         model = WideResNet(28,num_classes=100 if args.dataset == 'cifar100' else 10).to(device)
-        model.load_state_dict(torch.load('/home/zhijie/TRADES_dyp/checkpoint_eval/standard.pt'))
+        model.load_state_dict(torch.load('./checkpoint_eval/standard.pt'))
     elif args.load_clf == 'dist':
         model = WideResNet(28,num_classes=100 if args.dataset == 'cifar100' else 10).to(device)
-        model.load_state_dict(torch.load('/home/zhijie/TRADES_dyp/checkpoint_eval/dist.pt'))
+        model.load_state_dict(torch.load('./checkpoint_eval/dist.pt'))
     elif args.load_clf == 'dist-new':
         model = WideResNet(28,num_classes=100 if args.dataset == 'cifar100' else 10).to(device)
-        model.load_state_dict(torch.load('/home/zhijie/TRADES_dyp/checkpoint_eval/dist-new.pt'))
+        model.load_state_dict(torch.load('./checkpoint_eval/dist-new.pt'))
     else:
         raise NotImplementedError
 
@@ -358,7 +334,7 @@ def main():
 
     G = define_G(9, 6, args.ngf_G, args.net_G, not args.no_zero_pad, norm=args.norm_G, no_down_G=not args.down_G, use_relu_atlast=args.use_relu_G, outs=args.outs, use_dropout=args.use_dropout_G)
     # print(G)
-    # G.load_state_dict(torch.load('/data/zhijie/g_attack_pgd/generator-epoch20.pt'))
+
     if args.pretrained_g:
         G.load_state_dict(torch.load('generator_cifar10.pt'))
     if args.opt_G == 'adam':
