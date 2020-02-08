@@ -244,7 +244,7 @@ def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
     return net
 
 
-def define_G(input_nc, output_nc, ngf, netG, zero_pad=False, norm='batch', no_down_G=False, use_dropout=False, use_relu_atlast=False, init_type='normal', init_gain=0.02, gpu_ids=[torch.device('cuda:0')], outs=1, z_dim=0):
+def define_G(input_nc, output_nc, ngf, netG, zero_pad=True, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[torch.device('cuda:0')], z_dim=0):
     """Create a generator
 
     Parameters:
@@ -275,11 +275,11 @@ def define_G(input_nc, output_nc, ngf, netG, zero_pad=False, norm='batch', no_do
     norm_layer = get_norm_layer(norm_type=norm)
 
     if netG == 'resnet_9blocks':
-        net = ResnetGenerator(input_nc, output_nc, ngf, zero_pad=zero_pad, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, no_down_G=no_down_G, use_relu_atlast=use_relu_atlast, outs=outs, z_dim=z_dim)
+        net = ResnetGenerator(input_nc, output_nc, ngf, zero_pad=zero_pad, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, z_dim=z_dim)
     elif netG == 'resnet_6blocks':
-        net = ResnetGenerator(input_nc, output_nc, ngf, zero_pad=zero_pad, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=6, no_down_G=no_down_G, use_relu_atlast=use_relu_atlast, outs=outs, z_dim=z_dim)
+        net = ResnetGenerator(input_nc, output_nc, ngf, zero_pad=zero_pad, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=6, z_dim=z_dim)
     elif netG == 'resnet_3blocks':
-        net = ResnetGenerator(input_nc, output_nc, ngf, zero_pad=zero_pad, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3, no_down_G=no_down_G, use_relu_atlast=use_relu_atlast, outs=outs, z_dim=z_dim)
+        net = ResnetGenerator(input_nc, output_nc, ngf, zero_pad=zero_pad, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3, z_dim=z_dim)
     elif netG == 'unet_128':
         net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'unet_256':
@@ -405,7 +405,7 @@ class ResnetGenerator(nn.Module):
     We adapt Torch code and idea from Justin Johnson's neural style transfer project(https://github.com/jcjohnson/fast-neural-style)
     """
 
-    def __init__(self, input_nc, output_nc, ngf=64, zero_pad=False, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6, padding_type='reflect', no_down_G=False, use_relu_atlast=False, outs=1, z_dim=0):
+    def __init__(self, input_nc, output_nc, ngf=64, zero_pad=False, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6, padding_type='reflect', z_dim=0):
         """Construct a Resnet-based generator
 
         Parameters:
@@ -433,38 +433,16 @@ class ResnetGenerator(nn.Module):
                      nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0, bias=use_bias),
                      norm_layer(ngf),
                      nn.ReLU(True)]
+        
+        model += [ResnetBlock(ngf, padding_type='zero' if zero_pad else padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias, dim2=ngf*2)]
+        model += [ResnetBlock(ngf * 2, padding_type='zero' if zero_pad else padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias, dim2=ngf*2)]
+        model += [ResnetBlock(ngf * 2, padding_type='zero' if zero_pad else padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias, dim2=ngf)]
 
-        n_downsampling = 2
-        if not no_down_G:
-            for i in range(n_downsampling):  # add downsampling layers
-                mult = 2 ** i
-                model += [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3, stride=2, padding=1, bias=use_bias),
-                          norm_layer(ngf * mult * 2),
-                          nn.ReLU(True)]
-
-        # mult = 1 if no_down_G else 2 ** n_downsampling
-        # for i in range(n_blocks):       # add ResNet blocks
-        #
-        #     model += [ResnetBlock(ngf * mult, padding_type='zero' if zero_pad else padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias, use_relu_atlast=use_relu_atlast)]
-        model += [ResnetBlock(ngf, padding_type='zero' if zero_pad else padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias, use_relu_atlast=use_relu_atlast, dim2=ngf*2)]
-        model += [ResnetBlock(ngf*2, padding_type='zero' if zero_pad else padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias, use_relu_atlast=use_relu_atlast, dim2=ngf*2)]
-        model += [ResnetBlock(ngf*2, padding_type='zero' if zero_pad else padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias, use_relu_atlast=use_relu_atlast, dim2=ngf)]
-
-        if not no_down_G:
-            for i in range(n_downsampling):  # add upsampling layers
-                mult = 2 ** (n_downsampling - i)
-                model += [nn.ConvTranspose2d(ngf * mult, int(ngf * mult / 2),
-                                             kernel_size=3, stride=2,
-                                             padding=1, output_padding=1,
-                                             bias=use_bias),
-                          norm_layer(int(ngf * mult / 2)),
-                          nn.ReLU(True)]
         if zero_pad:
-            model += [nn.Conv2d(ngf, output_nc*outs, kernel_size=3, padding=1, bias=False)]
+            model += [nn.Conv2d(ngf, output_nc, kernel_size=3, padding=1, bias=False)]
         else:
             model += [nn.ReflectionPad2d(3)]
             model += [nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
-        # model += [nn.Tanh()]
 
         self.model = nn.ModuleList(model)
 
@@ -496,7 +474,7 @@ class ResnetGenerator(nn.Module):
 class ResnetBlock(nn.Module):
     """Define a Resnet block"""
 
-    def __init__(self, dim, padding_type, norm_layer, use_dropout, use_bias, use_relu_atlast, dim2=None):
+    def __init__(self, dim, padding_type, norm_layer, use_dropout, use_bias, dim2=None):
         """Initialize the Resnet block
 
         A resnet block is a conv block with skip connections
@@ -513,7 +491,6 @@ class ResnetBlock(nn.Module):
             self.short_cut = nn.ModuleList([
                 nn.Conv2d(dim, dim2, kernel_size=1, padding=0, bias=use_bias), norm_layer(dim2)])
         self.conv_block = self.build_conv_block(dim, dim2, padding_type, norm_layer, use_dropout, use_bias)
-        self.use_relu_atlast = use_relu_atlast
 
     def build_conv_block(self, dim, dim2, padding_type, norm_layer, use_dropout, use_bias):
         """Construct a convolutional block.
@@ -574,9 +551,7 @@ class ResnetBlock(nn.Module):
                 else:
                     out_short_cut = layer(out_short_cut)
             out = out_short_cut + out  # add skip connections
-        if self.use_relu_atlast:
-            return torch.nn.functional.relu(out)
-        return out
+        return torch.nn.functional.relu(out)
 
 
 class UnetGenerator(nn.Module):

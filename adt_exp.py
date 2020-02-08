@@ -73,6 +73,7 @@ elif args.dataset == 'cifar100':
     trainset = torchvision.datasets.CIFAR100(root='../data', train=True, download=True, transform=transform_train)
     testset = torchvision.datasets.CIFAR100(root='../data', train=False, download=True, transform=transform_test)
 elif args.dataset == 'svhn':
+    args.epsilon = 4.0 / 255.0
     trainset = torchvision.datasets.SVHN(root='../data', split='train', download=True, transform=transform_test)
     testset = torchvision.datasets.SVHN(root='../data', split='test', download=True, transform=transform_test)
 else:
@@ -124,6 +125,7 @@ def adt_loss(model,
     logits = model(x_adv)
     loss = F.cross_entropy(logits, y)
     return loss
+
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
