@@ -31,3 +31,24 @@ python adt_expam.pt --model-dir adt-expam
 ```
 python adt_impam.pt --model-dir adt-impam
 ```
+
+## Evaluation
+
+### Evaluation under White-box Attacks
+
+```
+python evaluate_attacks.py --model-path ${MODEL-PATH} --attack-method PGD (or FGSM/MIM/CW)
+```
+
+### Evaluation under Transfer-based Black-box Attacks
+
+First change the `white-box-attack` to `False`. Then run
+```
+python evaluate_attacks.py --source-model-path ${SOURCE-MODEL-PATH} --target-model-path ${TARGET-MODEL-PATH} --attack-method PGD (or FGSM/MIM/CW)
+```
+
+### Evaluation under SPSA
+
+```
+python spsa.py --model-path ${MODEL-PATH}
+```
