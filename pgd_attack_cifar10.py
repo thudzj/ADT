@@ -18,11 +18,11 @@ parser.add_argument('--test-batch-size', type=int, default=200, metavar='N',
                     help='input batch size for testing (default: 200)')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
-parser.add_argument('--epsilon', default=8.0/255.0,
+parser.add_argument('--epsilon', type=float, default=8.0/255.0,
                     help='perturbation')
-parser.add_argument('--num-steps', default=20,
+parser.add_argument('--num-steps', type=int, default=20,
                     help='perturb number of steps')
-parser.add_argument('--step-size', default=2.0/255.0,
+parser.add_argument('--step-size', type=float, default=2.0/255.0,
                     help='perturb step size')
 parser.add_argument('--random',
                     default=True,
