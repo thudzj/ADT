@@ -15,19 +15,19 @@ We have proposed three different methods for ADT. The command for each training 
 ### Training ADT<sub>EXP</sub>
 
 ```
-python adt_exp.pt --model-dir adt-exp
+python adt_exp.py --model-dir adt-exp
 ```
 
 ### Training ADT<sub>EXP-AM</sub>
 
 ```
-python adt_expam.pt --model-dir adt-expam
+python adt_expam.py --model-dir adt-expam
 ```
 
 ### Training ADT<sub>IMP-AM</sub>
 
 ```
-python adt_impam.pt --model-dir adt-impam
+python adt_impam.py --model-dir adt-impam
 ```
 
 ## Evaluation
