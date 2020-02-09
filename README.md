@@ -2,8 +2,6 @@
 
 This repository contains the code for adversarial distributional training (ADT) of our submission: *Adversarial Distributional Training for Robust Deep Learning* to ICML 2020.
 
-Our code is built upon https://github.com/yaodongyu/TRADES and .
-
 ## Prerequisites
 * Python (3.6.8)
 * Pytorch (1.3.0)
