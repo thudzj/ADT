@@ -40,7 +40,7 @@ python evaluate_attacks.py --model-path ${MODEL-PATH} --attack-method PGD (or FG
 
 ### Evaluation under Transfer-based Black-box Attacks
 
-First change the `white-box-attack` to `False`. Then run
+First change the `--white-box-attack` argument in `evaluate_attacks.py` to `False`. Then run
 ```
 python evaluate_attacks.py --source-model-path ${SOURCE-MODEL-PATH} --target-model-path ${TARGET-MODEL-PATH} --attack-method PGD (or FGSM/MIM/CW)
 ```
