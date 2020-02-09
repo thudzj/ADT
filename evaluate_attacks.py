@@ -36,7 +36,7 @@ parser.add_argument('--source-model-path',
 parser.add_argument('--target-model-path',
                     default='./checkpoints/model_cifar_wrn.pt',
                     help='target model for black-box attack evaluation')
-parser.add_argument('--white-box-attack', default=False,
+parser.add_argument('--white-box-attack', default=True,
                     help='whether perform white-box attack')
 parser.add_argument('--attack-method', default='PGD')
 parser.add_argument('--dataset', type=str, default='cifar10', help='dataset')
