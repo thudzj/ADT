@@ -141,7 +141,7 @@ def spsa_blackbox(model,
       if pred != ys:
         return xs, False, 0
 
-      xs_adv = Variable(xs.data, requires_grad=True).cuda()
+      xs_adv = Variable(xs.data.clone(), requires_grad=True).cuda()
       ys_repeat = ys.repeat(batch_size * 2)
       opt = torch.optim.Adam([xs_adv], lr=lr)
       for _ in range(1, iterations + 1):
